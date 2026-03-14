@@ -13,7 +13,8 @@
     "check": "npm run rustfmt:check && npm run clippy && npm run typecheck && npm run lint && npm run knip",
     "fix": "npm run rustfmt && npm run lint:fix",
     "build": "anchor build",
-    "test": "anchor test"
+    "test": "anchor test",
+    "test:mpc": "npx ts-mocha -p ./tsconfig.json -t 120000 tests/mpc-ecdsa-proxy.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -25,11 +26,13 @@
     "@types/chai": "^5.2.3",
     "@types/mocha": "^10.0.10",
     "chai": "^6.2.2",
+    "dotenv": "^16.4.0",
     "eslint": "^10.0.3",
     "globals": "^17.4.0",
     "knip": "^5.86.0",
     "mocha": "^11.7.5",
     "prettier": "^3.8.1",
+    "signet.js": "file:../signet.js",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0",

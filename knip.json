@@ -3,7 +3,10 @@
   "entry": ["tests/**/*.ts"],
   "project": ["tests/**/*.ts"],
   "ignoreDependencies": [
-    "ts-mocha",
-    "@types/bn.js"
+    "@types/bn.js",
+    "signet.js"
+  ],
+  "ignoreBinaries": [
+    "anchor"
   ]
 }
