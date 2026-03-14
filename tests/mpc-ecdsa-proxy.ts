@@ -19,9 +19,7 @@ import {
 } from "./helpers/evm-signer";
 import { createMpcSigner, deriveMpcEthAddress, signMessageMpc } from "./helpers/mpc-signer";
 
-const SKIP = !process.env.SEPOLIA_PRIVATE_KEY;
-
-(SKIP ? describe.skip : describe)("mpc-ecdsa-proxy", () => {
+describe("mpc-ecdsa-proxy", () => {
   let provider: anchor.AnchorProvider;
   let program: Program<EcdsaProxy>;
   let payer: Keypair;
