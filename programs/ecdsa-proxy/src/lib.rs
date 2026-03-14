@@ -11,7 +11,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("95nLhd1ntaNMntT4LvNTMc7LExwzv6Unwv1xBeRFmBj1");
+declare_id!("6GwcFok9RYaeupXYiXBcxm3wfV4HarJ1NSEH5wwwGnPF");
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InnerInstruction {

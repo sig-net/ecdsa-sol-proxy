@@ -1,5 +1,8 @@
 # ecdsa-sol-proxy
 
+> [!WARNING]
+> This is an example/proof-of-concept and has **not** been audited. Do not use in production.
+
 Solana program that lets Ethereum wallets sign and authorize on-chain transactions. An ETH address owns a PDA — any instruction batch signed by that key is verified on-chain via secp256k1 recovery and executed as CPIs from the PDA.
 
 Built with [Anchor](https://www.anchor-lang.com/) 0.32.

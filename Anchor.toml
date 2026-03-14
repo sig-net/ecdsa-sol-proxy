@@ -1,12 +1,17 @@
 [toolchain]
+anchor_version = "0.32.1"
+solana_version = "2.3.0"
 package_manager = "yarn"
 
 [features]
 resolution = true
 skip-lint = false
 
+[programs.devnet]
+ecdsa_proxy = "6GwcFok9RYaeupXYiXBcxm3wfV4HarJ1NSEH5wwwGnPF"
+
 [programs.localnet]
-ecdsa_proxy = "95nLhd1ntaNMntT4LvNTMc7LExwzv6Unwv1xBeRFmBj1"
+ecdsa_proxy = "6GwcFok9RYaeupXYiXBcxm3wfV4HarJ1NSEH5wwwGnPF"
 
 [registry]
 url = "https://api.apr.dev"
