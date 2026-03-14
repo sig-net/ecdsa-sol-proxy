@@ -1,0 +1,38 @@
+{
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint 'tests/**/*.ts' && prettier --check 'tests/**/*.ts'",
+    "lint:fix": "eslint --fix 'tests/**/*.ts' && prettier --write 'tests/**/*.ts'",
+    "format": "prettier --write 'tests/**/*.ts'",
+    "format:check": "prettier --check 'tests/**/*.ts'",
+    "typecheck": "tsc --noEmit",
+    "knip": "knip",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "rustfmt": "cargo fmt --all",
+    "rustfmt:check": "cargo fmt --all -- --check",
+    "check": "npm run rustfmt:check && npm run clippy && npm run typecheck && npm run lint && npm run knip",
+    "fix": "npm run rustfmt && npm run lint:fix",
+    "build": "anchor build",
+    "test": "anchor test"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.4"
+  },
+  "devDependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@types/bn.js": "^5.2.0",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "chai": "^6.2.2",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "knip": "^5.86.0",
+    "mocha": "^11.7.5",
+    "prettier": "^3.8.1",
+    "ts-mocha": "^11.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "viem": "^2.47.4"
+  }
+}

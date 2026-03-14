@@ -1,0 +1,30 @@
+[package]
+name = "ecdsa-proxy"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "ecdsa_proxy"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = "0.32.1"
+solana-secp256k1-recover = "2.2.1"
+solana-keccak-hasher = "2.2.1"
+
+
+[lints]
+workspace = true
