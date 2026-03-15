@@ -1,6 +1,6 @@
 import { contracts, constants, chainAdapters } from "signet.js";
 import { PublicKey } from "@solana/web3.js";
-import { createPublicClient, createWalletClient, http, hexToBytes, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { computeInnerHash, type IndexedInnerInstruction } from "./evm-signer";
@@ -10,15 +10,10 @@ const { abi: chainSigAbi } = contracts.evm.utils.ChainSignaturesContractABI;
 const { EVM } = chainAdapters.evm;
 
 type MpcContract = InstanceType<typeof ChainSignatureContract>;
+type EvmAdapter = InstanceType<typeof EVM>;
+type SepoliaPublicClient = ReturnType<typeof createPublicClient>;
 
-export interface MpcSigner {
-  contract: MpcContract;
-  evm: InstanceType<typeof EVM>;
-  predecessor: string;
-  publicClient: ReturnType<typeof createPublicClient>;
-}
-
-export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string): MpcSigner {
+export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string) {
   const account = privateKeyToAccount(sepoliaPrivateKey as `0x${string}`);
   const publicClient = createPublicClient({
     chain: sepolia,
@@ -34,26 +29,15 @@ export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string
     walletClient,
     contractAddress: constants.CONTRACT_ADDRESSES.ETHEREUM.TESTNET as `0x${string}`,
   });
-  const evm = new EVM({ publicClient, contract });
+  const evmAdapter = new EVM({ publicClient, contract });
 
-  return { contract, evm, predecessor: account.address, publicClient };
-}
-
-export async function deriveMpcEthAddress(
-  signer: MpcSigner,
-  path: string,
-  keyVersion: number
-): Promise<Buffer> {
-  const { address } = await signer.evm.deriveAddressAndPublicKey(
-    signer.predecessor,
-    path,
-    keyVersion
-  );
-  return Buffer.from(hexToBytes(address as `0x${string}`));
+  return { contract, evmAdapter, predecessor: account.address, publicClient };
 }
 
 export async function signMessageMpc(
-  signer: MpcSigner,
+  contract: MpcContract,
+  evmAdapter: EvmAdapter,
+  publicClient: SepoliaPublicClient,
   programId: PublicKey,
   nonce: bigint,
   remainingAccountKeys: PublicKey[],
@@ -66,13 +50,13 @@ export async function signMessageMpc(
   sepoliaRespondTxHash: string;
 }> {
   const innerHash = computeInnerHash(programId, nonce, remainingAccountKeys, indexedInstructions);
-  const { hashToSign } = await signer.evm.prepareMessageForSigning({ raw: innerHash });
+  const { hashToSign } = await evmAdapter.prepareMessageForSigning({ raw: innerHash });
 
   const signArgs = { payload: hashToSign, path, key_version: 1 };
-  const { txHash, requestId } = await signer.contract.createSignatureRequest(signArgs);
-  const receipt = await signer.publicClient.waitForTransactionReceipt({ hash: txHash });
+  const { txHash, requestId } = await contract.createSignatureRequest(signArgs);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-  const pollResult = await signer.contract.pollForRequestId({
+  const pollResult = await contract.pollForRequestId({
     requestId,
     payload: signArgs.payload,
     path: signArgs.path,
@@ -87,7 +71,7 @@ export async function signMessageMpc(
     );
   }
 
-  const respondLogs = await signer.publicClient.getContractEvents({
+  const respondLogs = await publicClient.getContractEvents({
     address: constants.CONTRACT_ADDRESSES.ETHEREUM.TESTNET as Hex,
     abi: chainSigAbi,
     eventName: "SignatureResponded",
@@ -109,7 +93,8 @@ export async function signMessageMpc(
 }
 
 export async function signMessageMpcSimple(
-  signer: MpcSigner,
+  contract: MpcContract,
+  evmAdapter: EvmAdapter,
   programId: PublicKey,
   nonce: bigint,
   remainingAccountKeys: PublicKey[],
@@ -117,9 +102,9 @@ export async function signMessageMpcSimple(
   path: string
 ): Promise<{ signature: Buffer; recoveryId: number }> {
   const innerHash = computeInnerHash(programId, nonce, remainingAccountKeys, indexedInstructions);
-  const { hashToSign } = await signer.evm.prepareMessageForSigning({ raw: innerHash });
+  const { hashToSign } = await evmAdapter.prepareMessageForSigning({ raw: innerHash });
 
-  const rsv = await signer.contract.sign(
+  const rsv = await contract.sign(
     { payload: hashToSign, path, key_version: 1 },
     { sign: {}, retry: { delay: 5_000, retryCount: 12 } }
   );

@@ -26,20 +26,13 @@ export interface IndexedInnerInstruction {
 /** Must match the hardcoded CHAIN_ID in constants.rs (devnet = 2) */
 export const CHAIN_ID = 2n;
 
-const WALLET_SEED = Buffer.from("ecdsa_proxy");
-const WALLET_PREFIX = Buffer.from("wallet");
+/** PDA seeds — must match constants.rs WALLET_SEED / WALLET_PREFIX */
+export const WALLET_SEED = Buffer.from("ecdsa_proxy");
+export const WALLET_PREFIX = Buffer.from("wallet");
 
 const SECP256K1_ORDER = BigInt(
   "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"
 );
-
-export function deriveWalletPDA(ethAddress: Buffer, programId: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync([WALLET_SEED, WALLET_PREFIX, ethAddress], programId);
-}
-
-export function ethAddressFromAccount(account: PrivateKeyAccount): Buffer {
-  return Buffer.from(hexToBytes(account.address));
-}
 
 /**
  * Convert pubkey-based InnerInstructions to index-based, given a remaining_accounts list.

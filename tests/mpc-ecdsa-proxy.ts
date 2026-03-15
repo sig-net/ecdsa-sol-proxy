@@ -4,6 +4,7 @@ import { Program } from "@coral-xyz/anchor";
 import type { EcdsaProxy } from "../target/types/ecdsa_proxy";
 import { expect } from "chai";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { hexToBytes, type Hex } from "viem";
 import {
   type Account,
   createAssociatedTokenAccountInstruction,
@@ -15,18 +16,13 @@ import {
   mintTo,
 } from "@solana/spl-token";
 import {
-  deriveWalletPDA,
+  WALLET_SEED,
+  WALLET_PREFIX,
   toAnchorInnerInstructions,
   toIndexedInnerInstructions,
   buildRemainingAccounts,
 } from "./helpers/evm-signer";
-import {
-  type MpcSigner,
-  createMpcSigner,
-  deriveMpcEthAddress,
-  signMessageMpc,
-  signMessageMpcSimple,
-} from "./helpers/mpc-signer";
+import { createMpcSigner, signMessageMpc, signMessageMpcSimple } from "./helpers/mpc-signer";
 
 describe("mpc-ecdsa-proxy", () => {
   let provider: anchor.AnchorProvider;
@@ -35,10 +31,13 @@ describe("mpc-ecdsa-proxy", () => {
   let walletPDA: PublicKey;
   let mint: PublicKey;
   let pdaAta: Account;
-  let signer: MpcSigner;
-  let ethAddress: Buffer;
+  let ethAddress: Uint8Array;
 
   const MPC_PATH = `ecdsa-sol-proxy,${Date.now()}`;
+  const { contract, evmAdapter, predecessor, publicClient } = createMpcSigner(
+    process.env.SEPOLIA_PRIVATE_KEY!,
+    process.env.SEPOLIA_RPC_URL!
+  );
 
   before(async () => {
     const connection = new Connection(process.env.SOLANA_DEVNET_RPC_URL!, "confirmed");
@@ -51,9 +50,12 @@ describe("mpc-ecdsa-proxy", () => {
     anchor.setProvider(provider);
 
     program = anchor.workspace.ecdsaProxy as Program<EcdsaProxy>;
-    signer = createMpcSigner(process.env.SEPOLIA_PRIVATE_KEY!, process.env.SEPOLIA_RPC_URL!);
-    ethAddress = await deriveMpcEthAddress(signer, MPC_PATH, 1);
-    [walletPDA] = deriveWalletPDA(ethAddress, program.programId);
+    const { address } = await evmAdapter.deriveAddressAndPublicKey(predecessor, MPC_PATH, 1);
+    ethAddress = hexToBytes(address as Hex);
+    [walletPDA] = PublicKey.findProgramAddressSync(
+      [WALLET_SEED, WALLET_PREFIX, ethAddress],
+      program.programId
+    );
 
     const initTxHash = await program.methods
       .initializeWallet(Array.from(ethAddress))
@@ -94,7 +96,16 @@ describe("mpc-ecdsa-proxy", () => {
     const nonce = 0n;
 
     const { signature, recoveryId, sepoliaRequestTxHash, sepoliaRespondTxHash } =
-      await signMessageMpc(signer, program.programId, nonce, remainingKeys, indexed, MPC_PATH);
+      await signMessageMpc(
+        contract,
+        evmAdapter,
+        publicClient,
+        program.programId,
+        nonce,
+        remainingKeys,
+        indexed,
+        MPC_PATH
+      );
     console.log("Sepolia MPC request tx:", sepoliaRequestTxHash);
     console.log("Sepolia MPC respond tx:", sepoliaRespondTxHash);
 
@@ -147,7 +158,8 @@ describe("mpc-ecdsa-proxy", () => {
     const nonce = BigInt(walletState.nonce.toString());
 
     const { signature, recoveryId } = await signMessageMpcSimple(
-      signer,
+      contract,
+      evmAdapter,
       program.programId,
       nonce,
       remainingKeys,
