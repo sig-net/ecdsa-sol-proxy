@@ -9,30 +9,22 @@ Built with [Anchor](https://www.anchor-lang.com/) 0.32.
 
 ## How it works
 
-### Direct signing (local ETH key)
-
-1. **Build** inner instructions off-chain (SPL transfers, swaps, etc.)
-2. **Compute** the message hash (see [below](#message-hash))
-3. **Sign** the hash with an ETH private key → `(signature, recovery_id)`
-4. **Submit** the Solana tx with the signature + indexed inner instructions
-5. **On-chain** — the program verifies the ECDSA signature, recovers the ETH address, asserts the nonce, and executes each inner instruction as a CPI from the PDA
-
 ### MPC signing (via [Signet](https://docs.sig.network) network)
 
-Instead of a local private key, an EVM wallet requests a distributed signature from the [Signet MPC network](https://docs.sig.network). The on-chain program does not distinguish between local-key and MPC signatures — verification is identical.
+An EVM wallet requests a signature from the Signet MPC network. The on-chain Solana Program verifies the ECDSA signature, recovers the ETH address, and executes each inner instruction as a CPI from the PDA.
 
-1. **Derive** an ETH address from the MPC network using a derivation path
+1. **Derive** an ETH address via `evmAdapter.deriveAddressAndPublicKey(predecessor, path, keyVersion)` — this is a local derivation from the MPC root public key, producing a deterministic child public key that is then converted to an ETH address
 2. **Initialize** the wallet PDA on Solana with that derived address
-3. **Build** inner instructions + compute the message hash (same as direct signing)
-4. **Request** a signature via `createSignatureRequest(hash, path)` on the Signet `ChainSignatureContract` (Sepolia) — the MPC network produces `(r, s, v)`
-5. **Submit** the signature to the Solana program
-6. **On-chain** — identical verification: ECDSA recovery, address comparison, nonce check, CPI dispatch
+3. **Build** inner instructions as indexed references — every account (including program IDs) must be passed in `remaining_accounts`, and inner instructions reference them by `u8` index instead of full pubkeys. This is mandatory to save transaction space (1-byte index vs 32-byte pubkey); the program resolves all accounts from that array at execution time. Compute the message hash over these indexed instructions (see [below](#message-hash))
+4. **Request** a signature via `createSignatureRequest({ payload: hash, path, key_version })` on the Signet `ChainSignatureContract` (Sepolia) — the MPC network produces `(r, s, v)`
+5. **Submit** the Solana tx with the signature, nonce, and indexed inner instructions + all referenced accounts in `remaining_accounts`
+6. **On-chain** — ECDSA recovery, address comparison, nonce check, CPI dispatch
 
-See the [Signet docs](https://docs.sig.network) for more on chain signatures and MPC key derivation. The MPC test (`tests/mpc-ecdsa-proxy.ts`) requires Sepolia and Solana devnet credentials via environment variables.
+See the [MPC e2e test](tests/mpc-ecdsa-proxy.ts) for a working example. The test requires Sepolia and Solana devnet credentials — see [`.env.example`](.env.example).
 
 ### Message hash
 
-Both paths produce the same hash structure:
+The signed message hash is constructed as:
 
 ```
 keccak256(
@@ -64,37 +56,15 @@ keccak256(
 
 Single-byte discriminators (instead of Anchor's default 8-byte) to save transaction space.
 
-## Replay protection
-
-Three independent layers prevent signature reuse:
-
-- **Chain ID** — hardcoded in the message hash; blocks cross-cluster replay
-- **Program ID** — binds signatures to this specific deployment
-- **Nonce** — monotonic counter incremented after each `execute`; blocks same-chain replay
-
-## Transaction size optimization
-
-Inner instructions use index-based account references into `remaining_accounts` instead of full 32-byte pubkeys. Account flags (`is_signer`, `is_writable`) are bit-packed into a single `u8`.
-
-```rust
-struct InnerAccountMeta {
-    account_index: u8,  // index into remaining_accounts
-    flags: u8,          // bit 0 = signer, bit 1 = writable
-}
-```
-
 ## Development
 
 ```bash
 anchor build              # Build the program
 anchor test               # Build + run all tests
+npm run test:mpc          # MPC e2e tests (requires .env.example vars)
 npm run check             # Full lint/typecheck suite (rustfmt, clippy, tsc, eslint, knip)
 npm run fix               # Auto-fix formatting
 ```
-
-### Test coverage
-
-The test suite validates: wallet initialization, SPL token transfers via PDA, replay rejection, wrong-signer rejection, nonce mismatch, chain ID binding, signature malleability rejection, batched inner instructions, instruction tampering detection, and wallet closure.
 
 ## Project structure
 
