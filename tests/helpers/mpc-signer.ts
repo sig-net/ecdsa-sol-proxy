@@ -107,3 +107,25 @@ export async function signMessageMpc(
     sepoliaRespondTxHash: respondTxHash,
   };
 }
+
+export async function signMessageMpcSimple(
+  signer: MpcSigner,
+  programId: PublicKey,
+  nonce: bigint,
+  remainingAccountKeys: PublicKey[],
+  indexedInstructions: IndexedInnerInstruction[],
+  path: string
+): Promise<{ signature: Buffer; recoveryId: number }> {
+  const innerHash = computeInnerHash(programId, nonce, remainingAccountKeys, indexedInstructions);
+  const { hashToSign } = await signer.evm.prepareMessageForSigning({ raw: innerHash });
+
+  const rsv = await signer.contract.sign(
+    { payload: hashToSign, path, key_version: 1 },
+    { sign: {}, retry: { delay: 5_000, retryCount: 12 } }
+  );
+
+  return {
+    signature: Buffer.concat([Buffer.from(rsv.r, "hex"), Buffer.from(rsv.s, "hex")]),
+    recoveryId: rsv.v - 27,
+  };
+}
