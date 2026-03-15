@@ -13,14 +13,14 @@ Built with [Anchor](https://www.anchor-lang.com/) 0.32.
 
 An EVM wallet requests a signature from the Signet MPC network. The on-chain Solana Program verifies the ECDSA signature, recovers the ETH address, and executes each inner instruction as a CPI from the PDA.
 
-1. **Derive** an ETH address from the MPC network using a derivation path
+1. **Derive** an ETH address via `evmAdapter.deriveAddressAndPublicKey(predecessor, path, keyVersion)` — this is a local derivation from the MPC root public key, producing a deterministic child public key that is then converted to an ETH address
 2. **Initialize** the wallet PDA on Solana with that derived address
 3. **Build** inner instructions as indexed references — every account (including program IDs) must be passed in `remaining_accounts`, and inner instructions reference them by `u8` index instead of full pubkeys. This is mandatory to save transaction space (1-byte index vs 32-byte pubkey); the program resolves all accounts from that array at execution time. Compute the message hash over these indexed instructions (see [below](#message-hash))
-4. **Request** a signature via `createSignatureRequest(hash, path)` on the Signet `ChainSignatureContract` (Sepolia) — the MPC network produces `(r, s, v)`
+4. **Request** a signature via `createSignatureRequest({ payload: hash, path, key_version })` on the Signet `ChainSignatureContract` (Sepolia) — the MPC network produces `(r, s, v)`
 5. **Submit** the Solana tx with the signature, nonce, and indexed inner instructions + all referenced accounts in `remaining_accounts`
 6. **On-chain** — ECDSA recovery, address comparison, nonce check, CPI dispatch
 
-See the [MPC e2e test](tests/mpc-ecdsa-proxy.ts) for a working example. The test requires Sepolia and Solana devnet credentials via environment variables.
+See the [MPC e2e test](tests/mpc-ecdsa-proxy.ts) for a working example. The test requires Sepolia and Solana devnet credentials — see [`.env.example`](.env.example).
 
 ### Message hash
 
@@ -61,6 +61,7 @@ Single-byte discriminators (instead of Anchor's default 8-byte) to save transact
 ```bash
 anchor build              # Build the program
 anchor test               # Build + run all tests
+npm run test:mpc          # MPC e2e tests (requires .env.example vars)
 npm run check             # Full lint/typecheck suite (rustfmt, clippy, tsc, eslint, knip)
 npm run fix               # Auto-fix formatting
 ```
