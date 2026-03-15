@@ -3,6 +3,7 @@ import { Program } from "@coral-xyz/anchor";
 import { EcdsaProxy } from "../target/types/ecdsa_proxy";
 import { expect } from "chai";
 import { Keypair, PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { hexToBytes } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   createMint,
@@ -12,8 +13,8 @@ import {
   createTransferInstruction,
 } from "@solana/spl-token";
 import {
-  deriveWalletPDA,
-  ethAddressFromAccount,
+  WALLET_SEED,
+  WALLET_PREFIX,
   signMessage,
   makeHighS,
   toAnchorInnerInstructions,
@@ -32,8 +33,8 @@ describe("ecdsa-proxy", () => {
   const evmWallet = privateKeyToAccount(generatePrivateKey());
   const evmWallet2 = privateKeyToAccount(generatePrivateKey());
 
-  const ethAddress = ethAddressFromAccount(evmWallet);
-  const ethAddress2 = ethAddressFromAccount(evmWallet2);
+  const ethAddress = hexToBytes(evmWallet.address);
+  const ethAddress2 = hexToBytes(evmWallet2.address);
 
   let walletPDA: PublicKey;
   let walletBump: number;
@@ -78,8 +79,14 @@ describe("ecdsa-proxy", () => {
   }
 
   before(async () => {
-    [walletPDA, walletBump] = deriveWalletPDA(ethAddress, programId);
-    [wallet2PDA] = deriveWalletPDA(ethAddress2, programId);
+    [walletPDA, walletBump] = PublicKey.findProgramAddressSync(
+      [WALLET_SEED, WALLET_PREFIX, ethAddress],
+      programId
+    );
+    [wallet2PDA] = PublicKey.findProgramAddressSync(
+      [WALLET_SEED, WALLET_PREFIX, ethAddress2],
+      programId
+    );
 
     mint = await createMint(provider.connection, payer, payer.publicKey, null, 6);
   });
