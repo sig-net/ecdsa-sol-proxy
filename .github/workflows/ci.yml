@@ -36,4 +36,8 @@ jobs:
       - run: npm ci
       - run: anchor build
       - run: npm run check
+
+      - name: Generate keypair
+        run: solana-keygen new --no-bip39-passphrase --force
+
       - run: anchor test --skip-build
