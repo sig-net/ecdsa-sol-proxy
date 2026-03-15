@@ -7,10 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  check:
-    name: Typecheck & Lint
+  ci:
+    name: Check & Test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -25,26 +25,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - run: npm ci
-      - run: npm run check
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: check
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
       - uses: solana-developers/actions/install-solana@v1
         with:
           version: "2.3.0"
@@ -53,4 +33,6 @@ jobs:
       - run: avm install 0.32.1 && avm use 0.32.1
 
       - run: npm ci
-      - run: anchor test
+      - run: anchor build
+      - run: npm run check
+      - run: anchor test --skip-build
