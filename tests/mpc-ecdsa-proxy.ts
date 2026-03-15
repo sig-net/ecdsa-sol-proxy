@@ -86,15 +86,10 @@ describe("mpc-ecdsa-proxy", () => {
     const indexed = toIndexedInnerInstructions([innerIx], remainingKeys);
     const nonce = 0n;
 
-    const { signature, recoveryId, sepoliaTxHash } = await signMessageMpc(
-      signer,
-      programId,
-      nonce,
-      remainingKeys,
-      indexed,
-      MPC_PATH
-    );
-    console.log("Sepolia MPC sign tx:", sepoliaTxHash);
+    const { signature, recoveryId, sepoliaRequestTxHash, sepoliaRespondTxHash } =
+      await signMessageMpc(signer, programId, nonce, remainingKeys, indexed, MPC_PATH);
+    console.log("Sepolia MPC request tx:", sepoliaRequestTxHash);
+    console.log("Sepolia MPC respond tx:", sepoliaRespondTxHash);
 
     const executeTxHash = await program.methods
       .execute(
