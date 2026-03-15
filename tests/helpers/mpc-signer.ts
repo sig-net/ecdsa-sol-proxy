@@ -14,6 +14,7 @@ export interface MpcSigner {
   contract: MpcContract;
   evm: InstanceType<typeof EVM>;
   predecessor: string;
+  publicClient: ReturnType<typeof createPublicClient>;
 }
 
 export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string): MpcSigner {
@@ -34,7 +35,7 @@ export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string
   });
   const evm = new EVM({ publicClient: publicClient as any, contract });
 
-  return { contract, evm, predecessor: account.address };
+  return { contract, evm, predecessor: account.address, publicClient };
 }
 
 export async function deriveMpcEthAddress(
@@ -57,17 +58,32 @@ export async function signMessageMpc(
   remainingAccountKeys: PublicKey[],
   indexedInstructions: IndexedInnerInstruction[],
   path: string
-): Promise<{ signature: Buffer; recoveryId: number }> {
+): Promise<{ signature: Buffer; recoveryId: number; sepoliaTxHash: string }> {
   const innerHash = computeInnerHash(programId, nonce, remainingAccountKeys, indexedInstructions);
   const { hashToSign } = await signer.evm.prepareMessageForSigning({ raw: innerHash });
 
-  const rsv = await signer.contract.sign(
-    { payload: hashToSign, path, key_version: 1 },
-    { sign: {}, retry: { delay: 5_000, retryCount: 12 } }
-  );
+  const signArgs = { payload: hashToSign, path, key_version: 1 };
+  const { txHash, requestId } = await signer.contract.createSignatureRequest(signArgs);
+  const receipt = await signer.publicClient.waitForTransactionReceipt({ hash: txHash });
+
+  const pollResult = await signer.contract.pollForRequestId({
+    requestId,
+    payload: signArgs.payload,
+    path: signArgs.path,
+    keyVersion: signArgs.key_version,
+    fromBlock: receipt.blockNumber,
+    options: { delay: 5_000, retryCount: 12 },
+  });
+
+  if (!pollResult || "error" in pollResult) {
+    throw new Error(
+      `MPC signature failed: ${pollResult ? JSON.stringify(pollResult) : "not found"}`
+    );
+  }
 
   return {
-    signature: Buffer.concat([Buffer.from(rsv.r, "hex"), Buffer.from(rsv.s, "hex")]),
-    recoveryId: rsv.v - 27,
+    signature: Buffer.concat([Buffer.from(pollResult.r, "hex"), Buffer.from(pollResult.s, "hex")]),
+    recoveryId: pollResult.v - 27,
+    sepoliaTxHash: txHash,
   };
 }
