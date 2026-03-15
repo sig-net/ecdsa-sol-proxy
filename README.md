@@ -9,36 +9,50 @@ Built with [Anchor](https://www.anchor-lang.com/) 0.32.
 
 ## How it works
 
+### Direct signing (local ETH key)
+
+1. **Build** inner instructions off-chain (SPL transfers, swaps, etc.)
+2. **Compute** the message hash (see [below](#message-hash))
+3. **Sign** the hash with an ETH private key → `(signature, recovery_id)`
+4. **Submit** the Solana tx with the signature + indexed inner instructions
+5. **On-chain** — the program verifies the ECDSA signature, recovers the ETH address, asserts the nonce, and executes each inner instruction as a CPI from the PDA
+
+### MPC signing (via [Signet](https://docs.sig.network) network)
+
+Instead of a local private key, an EVM wallet requests a distributed signature from the [Signet MPC network](https://docs.sig.network). The on-chain program does not distinguish between local-key and MPC signatures — verification is identical.
+
+1. **Derive** an ETH address from the MPC network using a derivation path
+2. **Initialize** the wallet PDA on Solana with that derived address
+3. **Build** inner instructions + compute the message hash (same as direct signing)
+4. **Request** a signature via `createSignatureRequest(hash, path)` on the Signet `ChainSignatureContract` (Sepolia) — the MPC network produces `(r, s, v)`
+5. **Submit** the signature to the Solana program
+6. **On-chain** — identical verification: ECDSA recovery, address comparison, nonce check, CPI dispatch
+
+See the [Signet docs](https://docs.sig.network) for more on chain signatures and MPC key derivation. The MPC test (`tests/mpc-ecdsa-proxy.ts`) requires Sepolia and Solana devnet credentials via environment variables.
+
+### Message hash
+
+Both paths produce the same hash structure:
+
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  Off-chain (Client)                                                      │
-│                                                                          │
-│  1. Build inner instructions (SPL transfers, swaps, etc.)                │
-│  2. Compute message hash:                                                │
-│       keccak256(                                                         │
-│         "\x19Ethereum Signed Message:\n32" ||                            │
-│         keccak256(chain_id || program_id || nonce ||                     │
-│                   keccak256(remaining_accounts) ||                       │
-│                   keccak256(borsh(inner_instructions)))                  │
-│       )                                                                  │
-│  3. Sign with ETH private key → (signature, recovery_id)                │
-│  4. Submit Solana tx with signature + indexed inner instructions         │
-└─────────────────────────────────┬────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│  On-chain (Solana Program)                                               │
-│                                                                          │
-│  1. Assert nonce == wallet_state.nonce                                   │
-│  2. Reject high-S signatures (malleability)                              │
-│  3. Recompute message hash from tx data                                  │
-│  4. secp256k1_recover(hash, signature, recovery_id) → pubkey            │
-│  5. keccak256(pubkey)[12..] → recovered ETH address                     │
-│  6. Assert recovered address == wallet_state.eth_address                 │
-│  7. Increment nonce                                                      │
-│  8. invoke_signed() each inner instruction with PDA as signer            │
-└──────────────────────────────────────────────────────────────────────────┘
+keccak256(
+  "\x19Ethereum Signed Message:\n32" ||
+  keccak256(chain_id || program_id || nonce ||
+            keccak256(remaining_accounts) ||
+            keccak256(borsh(inner_instructions)))
+)
 ```
+
+### On-chain verification
+
+1. Assert `nonce == wallet_state.nonce`
+2. Reject high-S signatures (malleability)
+3. Recompute message hash from tx data
+4. `secp256k1_recover(hash, signature, recovery_id)` → pubkey
+5. `keccak256(pubkey)[12..]` → recovered ETH address
+6. Assert recovered address == `wallet_state.eth_address`
+7. Increment nonce
+8. `invoke_signed()` each inner instruction with PDA as signer
 
 ## Instructions
 
@@ -98,8 +112,11 @@ programs/ecdsa-proxy/src/
     └── close_wallet.rs
 
 tests/
-├── ecdsa-proxy.ts          # Integration tests
-└── helpers/evm-signer.ts   # TypeScript signing (mirrors on-chain hashing)
+├── ecdsa-proxy.ts          # Integration tests (local key)
+├── mpc-ecdsa-proxy.ts      # Integration tests (MPC signing via Sepolia)
+└── helpers/
+    ├── evm-signer.ts       # TypeScript signing (mirrors on-chain hashing)
+    └── mpc-signer.ts       # MPC signer using signet.js ChainSignatureContract
 ```
 
 ## License

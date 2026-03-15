@@ -47,10 +47,11 @@ describe("mpc-ecdsa-proxy", () => {
     const ethAddress = await deriveMpcEthAddress(signer, MPC_PATH, 1);
     const [walletPDA] = deriveWalletPDA(ethAddress, programId);
 
-    await program.methods
+    const initTxHash = await program.methods
       .initializeWallet(Array.from(ethAddress))
       .accounts({ payer: payer.publicKey })
       .rpc();
+    console.log("Solana initializeWallet tx:", initTxHash);
 
     // Mint tokens to PDA
     const mint = await createMint(provider.connection, payer, payer.publicKey, null, 6);
@@ -85,7 +86,7 @@ describe("mpc-ecdsa-proxy", () => {
     const indexed = toIndexedInnerInstructions([innerIx], remainingKeys);
     const nonce = 0n;
 
-    const { signature, recoveryId } = await signMessageMpc(
+    const { signature, recoveryId, sepoliaTxHash } = await signMessageMpc(
       signer,
       programId,
       nonce,
@@ -93,8 +94,9 @@ describe("mpc-ecdsa-proxy", () => {
       indexed,
       MPC_PATH
     );
+    console.log("Sepolia MPC sign tx:", sepoliaTxHash);
 
-    await program.methods
+    const executeTxHash = await program.methods
       .execute(
         Array.from(signature),
         recoveryId,
@@ -104,6 +106,7 @@ describe("mpc-ecdsa-proxy", () => {
       .accounts({ walletState: walletPDA, payer: payer.publicKey })
       .remainingAccounts(remaining)
       .rpc();
+    console.log("Solana execute tx:", executeTxHash);
 
     // Verify tokens moved
     const recipientAccount = await getAccount(provider.connection, recipientAta.address);
