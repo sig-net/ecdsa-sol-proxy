@@ -1,11 +1,12 @@
 import { contracts, constants, chainAdapters } from "signet.js";
 import { PublicKey } from "@solana/web3.js";
-import { createPublicClient, createWalletClient, http, hexToBytes } from "viem";
+import { createPublicClient, createWalletClient, http, hexToBytes, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { computeInnerHash, type IndexedInnerInstruction } from "./evm-signer";
 
 const { ChainSignatureContract } = contracts.evm;
+const { abi: chainSigAbi } = contracts.evm.utils.ChainSignaturesContractABI;
 const { EVM } = chainAdapters.evm;
 
 type MpcContract = InstanceType<typeof ChainSignatureContract>;
@@ -29,11 +30,11 @@ export function createMpcSigner(sepoliaPrivateKey: string, sepoliaRpcUrl: string
     transport: http(sepoliaRpcUrl),
   });
   const contract = new ChainSignatureContract({
-    publicClient: publicClient as any,
-    walletClient: walletClient as any,
+    publicClient,
+    walletClient,
     contractAddress: constants.CONTRACT_ADDRESSES.ETHEREUM.TESTNET as `0x${string}`,
   });
-  const evm = new EVM({ publicClient: publicClient as any, contract });
+  const evm = new EVM({ publicClient, contract });
 
   return { contract, evm, predecessor: account.address, publicClient };
 }
@@ -58,7 +59,12 @@ export async function signMessageMpc(
   remainingAccountKeys: PublicKey[],
   indexedInstructions: IndexedInnerInstruction[],
   path: string
-): Promise<{ signature: Buffer; recoveryId: number; sepoliaTxHash: string }> {
+): Promise<{
+  signature: Buffer;
+  recoveryId: number;
+  sepoliaRequestTxHash: string;
+  sepoliaRespondTxHash: string;
+}> {
   const innerHash = computeInnerHash(programId, nonce, remainingAccountKeys, indexedInstructions);
   const { hashToSign } = await signer.evm.prepareMessageForSigning({ raw: innerHash });
 
@@ -81,9 +87,23 @@ export async function signMessageMpc(
     );
   }
 
+  const respondLogs = await signer.publicClient.getContractEvents({
+    address: constants.CONTRACT_ADDRESSES.ETHEREUM.TESTNET as Hex,
+    abi: chainSigAbi,
+    eventName: "SignatureResponded",
+    args: { requestId },
+    fromBlock: receipt.blockNumber,
+    toBlock: "latest",
+  });
+  const respondTxHash = respondLogs.at(-1)?.transactionHash;
+  if (!respondTxHash) {
+    throw new Error("SignatureResponded event not found after successful poll");
+  }
+
   return {
     signature: Buffer.concat([Buffer.from(pollResult.r, "hex"), Buffer.from(pollResult.s, "hex")]),
     recoveryId: pollResult.v - 27,
-    sepoliaTxHash: txHash,
+    sepoliaRequestTxHash: txHash,
+    sepoliaRespondTxHash: respondTxHash,
   };
 }
